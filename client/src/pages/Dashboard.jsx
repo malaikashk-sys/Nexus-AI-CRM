@@ -10,9 +10,25 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
 
+  // New States for Deals & Activities
+  const [deals, setDeals] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [newDeal, setNewDeal] = useState({ title: '', value: '', stage: 'LEAD' });
+  const [newActivity, setNewActivity] = useState({ type: 'CALL', details: '' });
+
   useEffect(() => {
     fetchContacts();
   }, []);
+
+  // Fetch deals and activities whenever a contact is selected
+  useEffect(() => {
+    if (selectedContact) {
+      fetchDealsAndActivities(selectedContact.id || selectedContact._id);
+    } else {
+      setDeals([]);
+      setActivities([]);
+    }
+  }, [selectedContact]);
 
   const fetchContacts = async () => {
     try {
@@ -20,6 +36,19 @@ export default function Dashboard() {
       setContacts(res.data);
     } catch (err) {
       console.error('Failed to fetch contacts', err);
+    }
+  };
+
+  const fetchDealsAndActivities = async (contactId) => {
+    try {
+      const [dealsRes, activitiesRes] = await Promise.all([
+        api.get(`/deals/contact/${contactId}`),
+        api.get(`/activities/contact/${contactId}`)
+      ]);
+      setDeals(dealsRes.data);
+      setActivities(activitiesRes.data);
+    } catch (err) {
+      console.error('Failed to fetch deals or activities', err);
     }
   };
 
@@ -37,13 +66,57 @@ export default function Dashboard() {
   const handleDeleteContact = async (id) => {
     try {
       await api.delete(`/contacts/${id}`);
-      if (selectedContact?.id === id) {
+      if (selectedContact?.id === id || selectedContact?._id === id) {
         setSelectedContact(null);
         setAiOutput('');
       }
       fetchContacts();
     } catch (err) {
       alert('Failed to delete contact');
+    }
+  };
+
+  // Deal Handlers
+  const handleCreateDeal = async (e) => {
+    e.preventDefault();
+    if (!selectedContact) return;
+    try {
+      await api.post('/deals', { ...newDeal, contactId: selectedContact.id || selectedContact._id });
+      setNewDeal({ title: '', value: '', stage: 'LEAD' });
+      fetchDealsAndActivities(selectedContact.id || selectedContact._id);
+    } catch (err) {
+      alert('Failed to create deal');
+    }
+  };
+
+  const handleDeleteDeal = async (dealId) => {
+    try {
+      await api.delete(`/deals/${dealId}`);
+      fetchDealsAndActivities(selectedContact.id || selectedContact._id);
+    } catch (err) {
+      alert('Failed to delete deal');
+    }
+  };
+
+  // Activity Handlers
+  const handleCreateActivity = async (e) => {
+    e.preventDefault();
+    if (!selectedContact) return;
+    try {
+      await api.post('/activities', { ...newActivity, contactId: selectedContact.id || selectedContact._id });
+      setNewActivity({ type: 'CALL', details: '' });
+      fetchDealsAndActivities(selectedContact.id || selectedContact._id);
+    } catch (err) {
+      alert('Failed to create activity');
+    }
+  };
+
+  const handleDeleteActivity = async (activityId) => {
+    try {
+      await api.delete(`/activities/${activityId}`);
+      fetchDealsAndActivities(selectedContact.id || selectedContact._id);
+    } catch (err) {
+      alert('Failed to delete activity');
     }
   };
 
@@ -54,7 +127,7 @@ export default function Dashboard() {
     setCopied(false);
     try {
       const res = await api.post('/ai/generate', {
-        contactId: selectedContact.id,
+        contactId: selectedContact.id || selectedContact._id,
         action: action
       });
       setAiOutput(res.data.result);
@@ -109,6 +182,148 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* --- DEALS & ACTIVITIES SECTIONS (Visible only when a contact is selected) --- */}
+      {selectedContact && (
+        <div className="max-w-7xl mx-auto px-6 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* 1. DEALS SECTION */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-xl font-bold text-white mb-4">Deals for {selectedContact.name}</h3>
+            
+            {/* Deals List */}
+            <div className="space-y-3 mb-6 max-h-60 overflow-y-auto pr-1">
+              {deals.length === 0 ? (
+                <p className="text-slate-400 text-sm">No deals found for this contact.</p>
+              ) : (
+                deals.map((deal) => (
+                  <div key={deal._id || deal.id} className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+                    <div>
+                      <h4 className="text-white font-medium text-sm">{deal.title}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-emerald-400 text-xs font-semibold">${deal.value}</span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                          {deal.stage}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteDeal(deal._id || deal.id)}
+                      className="text-slate-400 hover:text-red-400 text-xs px-2 py-1 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add Deal Form */}
+            <form onSubmit={handleCreateDeal} className="space-y-3 pt-4 border-t border-slate-800">
+              <h4 className="text-sm font-semibold text-slate-300">Add New Deal</h4>
+              <input 
+                type="text"
+                placeholder="Deal Title"
+                value={newDeal.title}
+                onChange={(e) => setNewDeal({ ...newDeal, title: e.target.value })}
+                required
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-slate-600"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input 
+                  type="number"
+                  placeholder="Value ($)"
+                  value={newDeal.value}
+                  onChange={(e) => setNewDeal({ ...newDeal, value: e.target.value })}
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-slate-600"
+                />
+                <select 
+                  value={newDeal.stage}
+                  onChange={(e) => setNewDeal({ ...newDeal, stage: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-slate-600"
+                >
+                  <option value="LEAD">LEAD</option>
+                  <option value="QUALIFIED">QUALIFIED</option>
+                  <option value="PROPOSAL_SENT">PROPOSAL_SENT</option>
+                  <option value="CLOSED_WON">CLOSED_WON</option>
+                  <option value="CLOSED_LOST">CLOSED_LOST</option>
+                </select>
+              </div>
+              <button 
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm py-2 rounded-lg transition-colors"
+              >
+                Add Deal
+              </button>
+            </form>
+          </div>
+
+          {/* 2. ACTIVITIES SECTION */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-xl font-bold text-white mb-4">Activities for {selectedContact.name}</h3>
+            
+            {/* Activities List */}
+            <div className="space-y-3 mb-6 max-h-60 overflow-y-auto pr-1">
+              {activities.length === 0 ? (
+                <p className="text-slate-400 text-sm">No activities recorded yet.</p>
+              ) : (
+                activities.map((activity) => (
+                  <div key={activity._id || activity.id} className="flex items-start justify-between bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          {activity.type}
+                        </span>
+                        <span className="text-slate-400 text-xs">
+                          {new Date(activity.createdAt || activity.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 text-sm mt-1.5">{activity.details}</p>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteActivity(activity._id || activity.id)}
+                      className="text-slate-400 hover:text-red-400 text-xs px-2 py-1 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add Activity Form */}
+            <form onSubmit={handleCreateActivity} className="space-y-3 pt-4 border-t border-slate-800">
+              <h4 className="text-sm font-semibold text-slate-300">Add New Activity</h4>
+              <select 
+                value={newActivity.type}
+                onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-slate-600"
+              >
+                <option value="CALL">CALL</option>
+                <option value="EMAIL">EMAIL</option>
+                <option value="MEETING">MEETING</option>
+                <option value="NOTE">NOTE</option>
+              </select>
+              <textarea 
+                placeholder="Activity details..."
+                value={newActivity.details}
+                onChange={(e) => setNewActivity({ ...newActivity, details: e.target.value })}
+                required
+                rows="2"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-slate-600 resize-none"
+              />
+              <button 
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm py-2 rounded-lg transition-colors"
+              >
+                Add Activity
+              </button>
+            </form>
+          </div>
+
+        </div>
+      )}
+
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -126,7 +341,7 @@ export default function Dashboard() {
                   <input
                     type="text"
                     placeholder="Full Name"
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
@@ -134,7 +349,7 @@ export default function Dashboard() {
                   <input
                     type="email"
                     placeholder="Work Email"
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
@@ -142,7 +357,7 @@ export default function Dashboard() {
                   <input
                     type="text"
                     placeholder="Company Name"
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     value={formData.company}
                     onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                   />
@@ -174,10 +389,11 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2.5 max-h-115 overflow-y-auto pr-1">
                   {contacts.map((c) => {
-                    const isSelected = selectedContact?.id === c.id;
+                    const contactId = c.id || c._id;
+                    const isSelected = selectedContact?.id === contactId || selectedContact?._id === contactId;
                     return (
                       <div
-                        key={c.id}
+                        key={contactId}
                         onClick={() => setSelectedContact(c)}
                         className={`p-4 rounded-xl cursor-pointer border transition flex items-center justify-between group ${
                           isSelected
@@ -212,7 +428,7 @@ export default function Dashboard() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteContact(c.id);
+                              handleDeleteContact(contactId);
                             }}
                             className="text-slate-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition"
                           >
@@ -255,26 +471,26 @@ export default function Dashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => handleAIGenerate('draft_email')}
-                      disabled={loading}
-                      className="p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex flex-col items-center justify-center gap-1.5 transition disabled:opacity-50"
-                    >
-                      <span className="text-base">✉️</span>
-                      <span>Draft Email</span>
-                    </button>
-                    
-                    <button
-                      onClick={() => handleAIGenerate('summarize')}
-                      disabled={loading}
-                      className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-xs flex flex-col items-center justify-center gap-1.5 transition disabled:opacity-50"
-                    >
-                      <span className="text-base">📊</span>
-                      <span>Summarize History</span>
-                    </button>
-                  </div>
+               <div className="space-y-4">
+                 <div className="grid grid-cols-2 gap-3">
+                   <button
+                     onClick={() => handleAIGenerate('draft_email')}
+                     disabled={loading}
+                     className="p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex flex-col items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                   >
+                     <span className="text-base">✉</span>
+                     <span>Draft Email</span>
+                   </button>
+                   
+                   <button
+                     onClick={() => handleAIGenerate('summarize')}
+                     disabled={loading}
+                     className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-xs flex flex-col items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                   >
+                     <span className="text-base">📊</span>
+                     <span>Summarize History</span>
+                   </button>
+                 </div>
 
                   {loading && (
                     <div className="p-8 rounded-xl border border-purple-500/20 bg-purple-500/5 text-center space-y-3">
@@ -291,7 +507,7 @@ export default function Dashboard() {
                         <span className="font-semibold text-slate-300">Generated Insights</span>
                         <button
                           onClick={handleCopy}
-                          className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-lg transition text-[11px] font-medium"
+                          className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-lg transition text-[11px] font-medium cursor-pointer"
                         >
                           {copied ? '✓ Copied' : '📋 Copy Output'}
                         </button>
