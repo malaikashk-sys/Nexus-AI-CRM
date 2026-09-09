@@ -34,5 +34,32 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ error: error.message || 'Registration internal server error' });
   }
 });
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const secret = process.env.JWT_SECRET || 'fallback_secret_key_123';
+    const token = jwt.sign({ userId: user.id }, secret, { expiresIn: '7d' });
+
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (error) {
+    console.error('SERVER CRASH ERROR:', error);
+    res.status(500).json({ error: error.message || 'Login internal server error' });
+  }
+});
 
 module.exports = router;
