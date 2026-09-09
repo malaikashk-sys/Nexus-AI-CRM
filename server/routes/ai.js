@@ -32,7 +32,8 @@ router.post('/generate', authMiddleware, async (req, res) => {
       Associated Deals: ${JSON.stringify(contact.deals)}
       Keep the tone warm, professional, and concise.`;
     } else if (action === 'summarize') {
-      prompt = `Summarize the relationship history for this CRM client into bullet points.
+      prompt = `Summarize the relationship history for this CRM client into bullet points.You are a professional sales AI assistant. Draft a personalized follow-up email 
+for a client, signed off by "Malaika Farooq" from "Nexus AI CRM".
       Client Name: ${contact.name}
       Activities: ${JSON.stringify(contact.activities)}
       Deals: ${JSON.stringify(contact.deals)}

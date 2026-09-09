@@ -18,7 +18,30 @@ router.get('/', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch deals.' });
   }
 });
+// Get deals for a specific contact
+router.get('/contact/:contactId', authMiddleware, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const deals = await prisma.deal.findMany({
+      where: { contactId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(deals);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch deals for contact.' });
+  }
+});
 
+// Delete a deal
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.deal.delete({ where: { id } });
+    res.json({ message: 'Deal deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete deal.' });
+  }
+});
 // Create deal
 router.post('/', authMiddleware, async (req, res) => {
   try {

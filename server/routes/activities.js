@@ -17,5 +17,28 @@ router.post('/', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to add activity.' });
   }
 });
+// Get activities for a specific contact
+router.get('/contact/:contactId', authMiddleware, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const activities = await prisma.activity.findMany({
+      where: { contactId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(activities);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch activities for contact.' });
+  }
+});
 
+// Delete an activity
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.activity.delete({ where: { id } });
+    res.json({ message: 'Activity deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete activity.' });
+  }
+});
 module.exports = router;
